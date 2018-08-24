@@ -51,7 +51,7 @@ public class Test {
         System.out.println(Objects.equals(o1,o2) ? "yes" : "no");
         System.out.println(Objects.equals(o1,ox) ? "yes" : "no");
 
-        String authors = String.join(", ", "1", "2", "3");
+        String authors = String.join(", ", "1", "2", "3","4");
         System.out.println(authors);
     }
 
