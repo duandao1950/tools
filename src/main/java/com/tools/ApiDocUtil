@@ -1,0 +1,426 @@
+package com.utils;
+
+import com.google.common.base.Stopwatch;
+import com.google.common.collect.Lists;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import javax.annotation.Nullable;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.FilenameUtils;
+import org.apache.commons.lang3.StringUtils;
+
+public class ApiDocUtil {
+    private static final String APP_NAME = "xxx";
+    
+    private static final String PROTO_KEY_MESSAGE = "message";
+    private static final String PROTO_KEY_RIGHT_BRACES = "{";
+    private static final String PROTO_KEY_LEFT_BRACES = "}";
+    private static final String PROTO_KEY_RIGHT_ANGLE_BRACKETS = "<";
+    private static final String PROTO_KEY_LEFT_ANGLE_BRACKETS = ">";
+    private static final String PROTO_KEY_BLANK_SPACE = " ";
+    private static final String PROTO_KEY_EQUAL_SIGN = "=";
+    private static final String PROTO_KEY_LINE_FEED = "\n";
+    private static final String PROTO_KEY_DOUBLE_BACKSLASH = "//";
+    private static final String PROTO_KEY_MAP = "map<";
+    private static final String PROTO_KEY_STRING = "string";
+    private static final String PROTO_KEY_REPEATED = "repeated";
+    private static final String PROTO_KEY_INT64 = "int64";
+    private static final String PROTO_KEY_INT32 = "int32";
+    private static final String PROTO_KEY_DOUBLE = "double";
+    private static final String PROTO_KEY_BOOL = "bool";
+    private static final String PROTO_KEY_ERROR = "Error";
+    private static final String PROTO_KEY_PAGE_INFO = "PageInfo";
+    private static final String PROTO_KEY_PAGE = "page";
+    private static final String PROTO_KEY_IS_END = "isEnd";
+    private static final String PROTO_KEY_DEFAULT_JOIN = "{\n}";
+    private static final String PROJECT_KEY_PATH = "\\src\\main\\proto";
+    private static final String PROJECT_KEY_DOUBLE_SLASH = "\\";
+    private static final Map<String,String> VAR_NAME_MAP = new HashMap<>();
+    private static final List<String> PROTO_KEY_LIST = new LinkedList<String>(){{
+        add(PROTO_KEY_MAP);
+        add(PROTO_KEY_STRING);
+        add(PROTO_KEY_REPEATED);
+        add(PROTO_KEY_INT64);
+        add(PROTO_KEY_INT32);
+        add(PROTO_KEY_DOUBLE);
+        add(PROTO_KEY_BOOL);
+        add(PROTO_KEY_ERROR);
+        add(PROTO_KEY_PAGE_INFO);
+        add(PROTO_KEY_PAGE);
+        add(PROTO_KEY_IS_END);
+    }};
+
+    public static void main(String[] args) {
+        ApiDocUtil.doc("ItemDTO");
+    }
+
+    public static void doc(Class className) {
+        doc(className, APP_NAME);
+    }
+
+    public static void doc(Class className, String appName) {
+        doc(className, appName,null);
+    }
+
+    public static void doc(Class className, String appName, String path) {
+        path = StringUtils.isBlank(path) ? getTargetPath(appName) : path;
+        doc(className.getSimpleName(), appName, path);
+    }
+
+    public static void doc(String className) {
+        doc(className, APP_NAME);
+    }
+
+    public static void doc(String className, String appName) {
+        doc(className, appName, null);
+    }
+
+    public static void doc(String className, String appName, String path) {
+        path = StringUtils.isBlank(path) ? getTargetPath(appName) : path;
+        Stopwatch started = Stopwatch.createStarted();
+        search(path, className);
+        System.out.println("耗时：" + started.elapsed(TimeUnit.MILLISECONDS));
+    }
+
+    /**
+     * 生成文档注释
+     * @param path
+     * @param className
+     * @return
+     */
+    private static boolean search(String path, String className) {
+        try {
+            if (StringUtils.isBlank(path)) {
+                throw new IllegalArgumentException("the path is empty!");
+            }
+            if (StringUtils.isBlank(className)) {
+                throw new IllegalArgumentException("the className is empty!");
+            }
+            Map<String, Object> mapTotalFile = new KMPSearch()
+                    .kmpSearchFileByKeyword(path + PROJECT_KEY_PATH, className);
+            List<Map<String, Object>> listMsg = null;
+            Object listMsg0 = mapTotalFile.get("resultMsg");
+            if (listMsg0 == null) {
+                return false;
+            }
+            listMsg = (List<Map<String, Object>>) listMsg0;
+            for (int i = 0; i < listMsg.size(); i++) {
+                Map<String, Object> mapItem = listMsg.get(i);
+                List<String> nextKeyWords = executeContent((File) mapItem.get("filePath"),
+                        className);
+                if (CollectionUtils.isEmpty(nextKeyWords)) {
+                    continue;
+                }
+                nextKeyWords(path, nextKeyWords);
+            }
+            return true;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    private static void nextKeyWords(String path, List<String> nextKeyWords) {
+        if (CollectionUtils.isEmpty(nextKeyWords)) {
+            return;
+        }
+        for (String nextKeyWord : nextKeyWords) {
+            search(path, nextKeyWord);
+        }
+    }
+
+    private static List<String> executeContent(File file, String className)
+            throws IOException {
+        List<String> nextKeyWords = new ArrayList<>();
+        List<String> lines = FileUtils.readLines(file, StandardCharsets.UTF_8);
+        List<String> contents = Lists.newArrayList();
+        boolean content = false;
+        for (String line : lines) {
+            if (StringUtils.isBlank(line)) {
+                continue;
+            }
+            String match = StringUtils.substringBetween(line,PROTO_KEY_MESSAGE,PROTO_KEY_RIGHT_BRACES);
+            if (StringUtils.isNotBlank(match) && className.equals(match.trim())) {
+                content = true;
+            }
+            if (content) {
+                contents.add(line);
+                if (line.contains(PROTO_KEY_LEFT_BRACES)) {
+                    break;
+                }
+            }
+        }
+        StringBuilder join = new StringBuilder(PROTO_KEY_RIGHT_BRACES+PROTO_KEY_LINE_FEED);
+        String nextRowNotes = "";
+        for (String line : contents) {
+            if (StringUtils.isBlank(line)) {
+                continue;
+            }
+            String notes = StringUtils.substringAfter(line, PROTO_KEY_DOUBLE_BACKSLASH);
+            notes = StringUtils.isBlank(notes) ? nextRowNotes : notes;
+            boolean next = false;
+            boolean executed = false;
+            for (String protoKey : PROTO_KEY_LIST) {
+                if (StringUtils.isBlank(line)) {
+                    break;
+                }
+                if (line.indexOf(PROTO_KEY_MESSAGE) >= 0 || line.indexOf(PROTO_KEY_RIGHT_BRACES) >= 0 || line.indexOf(PROTO_KEY_LEFT_BRACES) >= 0) {
+                    break;
+                }
+                if (line.indexOf(PROTO_KEY_EQUAL_SIGN) > 0  && line.indexOf(protoKey) < 0) {
+                    next = true;
+                    continue;
+                }
+                if (!PROTO_KEY_REPEATED.equals(protoKey)) {
+                    String matchContent = StringUtils.substringBetween(line, protoKey, PROTO_KEY_EQUAL_SIGN);
+                    if (line.indexOf(PROTO_KEY_MAP) >= 0) {
+                        matchContent = StringUtils.substringBetween(line, PROTO_KEY_LEFT_ANGLE_BRACKETS, PROTO_KEY_EQUAL_SIGN);
+                    }
+                    if (StringUtils.isNotBlank(matchContent) && !executed) {
+                        join.append(matchContent + notes + PROTO_KEY_LINE_FEED);
+                        executed = true;
+                        nextRowNotes = "";
+                    }else {
+                        nextRowNotes = notes;
+                    }
+                }
+            }
+            if (next) {
+                String[] arr = StringUtils.split(line, PROTO_KEY_BLANK_SPACE);
+                if (line.indexOf(PROTO_KEY_MAP) >= 0) {
+                    String lineSplit = StringUtils.substringAfter(line, PROTO_KEY_LEFT_ANGLE_BRACKETS);
+                    arr = StringUtils.split(lineSplit, PROTO_KEY_BLANK_SPACE);
+                }
+                if (arr.length == 0) {
+                    continue;
+                }
+                String head = arr[0].trim();
+                String nextKeyWord = "";
+                String note = "";
+                if (PROTO_KEY_REPEATED.equals(head)) {
+                    nextKeyWord = arr.length > 1 ? arr[1].trim() : "";
+                    note = arr.length > 2 ? arr[2].trim() : "";
+                }else {
+                    nextKeyWord = arr.length > 0 ? arr[0].trim() : "";
+                    note = arr.length > 1 ? arr[1].trim() : "";
+                }
+                if (!StringUtils.isBlank(nextKeyWord) && !nextKeyWords.contains(nextKeyWord)
+                        && !PROTO_KEY_LIST.contains(nextKeyWord)) {
+                    VAR_NAME_MAP.put(nextKeyWord, note + " " + (notes == null ? "" : notes));
+                    nextKeyWords.add(nextKeyWord);
+                }
+            }
+        }
+        String result = join.append(PROTO_KEY_LEFT_BRACES).toString();
+        if (!PROTO_KEY_DEFAULT_JOIN.equals(result)) {
+            String varName = VAR_NAME_MAP.get(className) == null ? className : VAR_NAME_MAP.get(className);
+            System.out.println(varName + PROTO_KEY_LINE_FEED + result);
+        }
+        return nextKeyWords;
+    }
+
+    @Nullable
+    private static String getTargetPath(String appName) {
+        try {
+            appName = StringUtils.isBlank(appName) ? APP_NAME : appName;
+            String projectPath = System.getProperty("user.dir");
+            if (StringUtils.isBlank(projectPath)) {
+                throw new IllegalArgumentException("the projectPath not exist!");
+            }
+            if (!projectPath.contains(appName)) {
+                throw new IllegalArgumentException("the projectPath not this project name!");
+            }
+            String rootPath = StringUtils.substringBefore(projectPath, appName + "-");
+            String target = rootPath + PROJECT_KEY_DOUBLE_SLASH + appName + "-proto";
+            boolean hasDirectory = FilenameUtils.directoryContains(rootPath, target);
+            if (!hasDirectory) {
+                throw new IllegalArgumentException("the project file not directory!");
+            }
+            return target;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+}
+
+class KMPSearch {
+    ArrayList<File> listFilesObj = new ArrayList<File>();
+    public ArrayList<File> getFiles(String strFilePath) {
+        File fileObj = new File(strFilePath);
+        if (fileObj.isDirectory()) {
+            File fileNextDir[] = fileObj.listFiles();
+            for (File fileItem : fileNextDir) {
+                if (fileItem.isDirectory()) {
+                    getFiles(fileItem.getPath());
+                } else {
+                    listFilesObj.add(fileItem);
+                }
+            }
+        } else {
+            listFilesObj.add(fileObj);
+        }
+        return listFilesObj;
+    }
+
+    /**
+     * 使用kmp算法
+     * 通过字符串搜索文件，将搜索到的结果封装到map，list混合集合中，并最终返回一个map集合
+     * @param strFilePath
+     * @param strSearch
+     * @return
+     */
+    public Map<String, Object> kmpSearchFileByKeyword(String strFilePath, String strSearch) {
+        int[] kmpTable = getKMPtable(strSearch);
+        ArrayList<File> listFilesObj = getFiles(strFilePath);
+        Map<String, Object> mapTotalFile = new HashMap<String, Object>();
+        ArrayList<Object> listMsg = new ArrayList<Object>();
+        int fileNum = 0;
+        long totalCharNum = 0;
+        for (File listItem : listFilesObj) {
+            Map<String, Object> mapFile = new HashMap<String, Object>();
+            ArrayList<Integer> listLineNum = new ArrayList<Integer>();
+            ArrayList<Integer> listLineExistCount = new ArrayList<Integer>();
+            int lineNum = 1;
+            int existCount = 0;
+            int totalCount = 0;
+            try {
+                BufferedReader buffererReader = new BufferedReader(new FileReader(listItem));
+                String strLine = null;
+                while ((strLine = buffererReader.readLine()) != null) {
+                    existCount = kmpSearchStrByStr(strLine, strSearch, kmpTable);
+                    if (existCount != 0) {
+                        listLineNum.add(lineNum);
+                        listLineExistCount.add(existCount);
+                    }
+                    totalCharNum += strLine.length();
+                    totalCount += existCount;
+
+                    lineNum++;
+                }
+                buffererReader.close();
+                if (totalCount != 0) {
+                    mapFile.put("filePath", listItem);
+                    mapFile.put("totalCount", totalCount);
+                    mapFile.put("lineNum", listLineNum);
+                    mapFile.put("lineExistCount", listLineExistCount);
+                }
+                if (mapFile.size() != 0) {
+                    listMsg.add(mapFile);
+                }
+
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            fileNum++;
+        }
+        if (listMsg.size() != 0) {
+            mapTotalFile.put("resultMsg", listMsg);
+        }
+        mapTotalFile.put("searchPath", strFilePath);
+        mapTotalFile.put("strSearch", strSearch);
+        mapTotalFile.put("fileNum", fileNum);
+        mapTotalFile.put("totalCharNum", totalCharNum);
+        return mapTotalFile;
+    }
+
+    /**
+     * 参数1为内容字符串
+     * 参数2为输入的搜索字符串即搜索串
+     * 参数3为输入的搜索字符串的部分匹配数值表，为int类型的一维数组
+     * 全匹配的基于部分匹配表的KMP算法
+     * 并不是基于next数组
+     * 其返回值是当前字符串中有出现搜索串的个数
+     * 此时并无下标
+     * @param totalStr
+     * @param strSearch
+     * @param kmpTable
+     * @return
+     */
+    public int kmpSearchStrByStr(String totalStr, String strSearch, int kmpTable[]) {
+        char searchChar[] = strSearch.toCharArray();
+        char totalChar[] = totalStr.toCharArray();
+        int s = 0;
+        int t = 0;
+        int existCount = 0;
+        while (s < searchChar.length && t < totalChar.length) {
+            if (searchChar[s] == totalChar[t]) {
+                if ((s + 1) != searchChar.length) {
+                    s++;
+                    t++;
+                } else {
+                    existCount++;
+                    if ((totalChar.length - (t + 1)) >= searchChar.length) {
+                        s = 0;
+                        t++;
+                    } else {
+                        break;
+                    }
+                }
+            } else if (s == 0) {
+                s = 0;
+                t++;
+            } else {
+                s = s - (s - kmpTable[(s - 1)]);
+            }
+            if ((t + 1) >= totalChar.length) {
+                break;
+            }
+        }
+        return existCount;
+    }
+
+    /**
+     * 获取kmp的部分匹配数值表
+     * 但得先获取字符串所有可能长度的最大公告元素长度，将其存放到int数组中返回
+     * @param strInput
+     * @return
+     */
+    public int[] getKMPtable(String strInput) {
+        int intTablesLength = strInput.length();
+        int kmp_table[] = new int[intTablesLength];
+        for (int i = 0; i < strInput.length(); i++) {
+            String strItem = strInput.substring(0, i + 1);
+            int intMaxPublicNum = getMaxPublicNum(strItem);
+            kmp_table[i] = intMaxPublicNum;
+        }
+        return kmp_table;
+    }
+
+    //获取前缀和后缀，并最终对比得到最大的公共元素长度,并返回
+    public int getMaxPublicNum(String strItem) {
+        int intMaxPublicNum = 0;
+        int intItemLength = strItem.length();
+        String strFront[] = new String[intItemLength - 1];
+        String strBack[] = new String[intItemLength - 1];
+        for (int i = 0; i < intItemLength - 1; i++) {
+            strFront[i] = strItem.substring(0, i + 1);
+        }
+        for (int i = intItemLength; i > 1; i--) {
+            strBack[intItemLength - i] = strItem.substring(i - 1, intItemLength);
+        }
+        int n = -1;
+        for (int i = 0; i < intItemLength - 1; i++) {
+            if (strFront[i].equals(strBack[i])) {
+                n = i;
+            }
+        }
+        if (n != -1) {
+            intMaxPublicNum = strFront[n].length();
+        }
+        return intMaxPublicNum;
+    }
+}
