@@ -1,0 +1,111 @@
+import com.google.gson.ExclusionStrategy;
+import com.google.gson.FieldAttributes;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import java.util.ArrayList;
+import java.util.List;
+import lombok.extern.slf4j.Slf4j;
+
+/**
+ * 格式化JSON数据
+ * @Description
+ **/
+@Slf4j
+public class PrintJsonUtil {
+    private static boolean isOpen = true;
+    private static boolean isRPCOpen = false;
+    private static List<String> shouldSkipFields = new ArrayList<>();
+    static {
+        shouldSkipFields.add("bitField0_");
+        shouldSkipFields.add("memoizedIsInitialized");
+        shouldSkipFields.add("unknownFields");
+        shouldSkipFields.add("memoizedSize");
+        shouldSkipFields.add("memoizedHashCode");
+        shouldSkipFields.add("MemoizedSerializedSize");
+    }
+
+    private PrintJsonUtil () {
+
+    }
+    /**
+     * 打印格式化JSON数据
+     * @param src
+     */
+    public static void print(Object src, String... val) {
+        if (isRPCOpen) {
+            String text = toJson(src);
+            log.warn("\n" + text + "\n");
+            if (val != null
+                    && src.getClass().getSimpleName().toLowerCase().indexOf("response") >= 0) {
+                StackTraceElement tmp = Thread.currentThread().getStackTrace()[2];
+                JsonObject jsonObject = new JsonObject();
+                jsonObject.addProperty("declaringClass", tmp.getClassName());
+                jsonObject.addProperty("fileName", tmp.getMethodName()+"("+tmp.getFileName()+":"+tmp.getLineNumber()+")");
+                log.warn("\n"+toJson(jsonObject)+"\n");
+                log.warn(toJson(getLogLocality(tmp)));
+            }
+        }
+    }
+
+    /**
+     * 打印格式化JSON数据
+     * @param src
+     */
+    public static void print(Object src) {
+        if (isOpen) {
+            String text = toJson(src);
+            log.warn("\n"+text+"\n");
+        }
+    }
+
+    private static boolean matches(String faName) {
+        for (String name:shouldSkipFields) {
+            if (faName.indexOf(name) >= 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+    /**
+     * 单元测试接口 JSON文档
+     * 1、去掉不必要的字段
+     * 2、格式化输出
+     * @return
+     */
+    public static Gson build() {
+        ExclusionStrategy myExclusionStrategy = new ExclusionStrategy() {
+            @Override
+            public boolean shouldSkipField(FieldAttributes fa) {
+                return matches(fa.getName());
+            }
+            @Override
+            public boolean shouldSkipClass(Class<?> clazz) {
+                return false;
+            }
+        };
+
+        return new GsonBuilder()
+                .setExclusionStrategies(myExclusionStrategy)
+                .disableHtmlEscaping()
+                .setPrettyPrinting()
+                .create();
+    }
+
+    //去掉下划线
+    public static String toJson(Object src) {
+        String formatText = build().toJson(src).replace("_","");
+        log.warn("#################入参出参########################");
+        return formatText;
+    }
+
+    public static String getLogLocality(StackTraceElement tmp){
+        StringBuilder sb = new StringBuilder();
+        return sb.append(tmp.getMethodName())
+                .append("(")
+                .append(tmp.getFileName())
+                .append(":")
+                .append(tmp.getLineNumber())
+                .append(")").toString();
+    }
+}
