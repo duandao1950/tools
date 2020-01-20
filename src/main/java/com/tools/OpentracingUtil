@@ -1,0 +1,31 @@
+import com.google.common.collect.ImmutableMap;
+import io.opentracing.Scope;
+import io.opentracing.Span;
+import io.opentracing.Tracer;
+import io.opentracing.log.Fields;
+import io.opentracing.tag.Tags;
+import io.opentracing.util.GlobalTracer;
+import java.util.concurrent.Callable;
+
+public class opentracingUtil {
+  /**
+   * opentracing
+   * @param spanName
+   * @param callable
+   * @param <T>
+   * @return
+   */
+  private <T> T tracer(String spanName, Callable<? extends T> callable) {
+      final Tracer tracer = GlobalTracer.get();
+      final Span span = tracer.buildSpan(spanName).start();
+      try (Scope ignore = tracer.scopeManager().activate(span)) {
+          return callable.call();
+      } catch (Exception ex) {
+          Tags.ERROR.set(span, true);
+          span.log(ImmutableMap.of(Fields.EVENT, "error", Fields.ERROR_OBJECT, ex, Fields.MESSAGE, ex.getMessage()));
+      } finally {
+          span.finish();
+      }
+      return null;
+  }
+}
