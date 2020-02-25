@@ -4,7 +4,8 @@ import com.google.common.collect.Maps;
 import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;
 import lombok.extern.slf4j.Slf4j;
-import org.joor.Reflect;
+import org.springframework.util.ReflectionUtils;
+import java.lang.reflect.Field;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -31,7 +32,7 @@ public class LogBusinessUtil {
 
     private static Map<String, String> getLogLocationConfigArgsMap(String logLocationConfigArgs) {
         try {
-            //logLocationConfigArgs = "{\"shopId\": \"1651\",\"cityCode\":\"C320100\"}";
+            //logLocationConfigArgs = "{\"shopId\": \"768\",\"cityCode\":\"C320100\"}";
             Map<String, String> fieldMap = getLocalMap(logLocationConfigArgs);
             if (fieldMap != null) {
                 return fieldMap;
@@ -203,7 +204,7 @@ public class LogBusinessUtil {
             if (Objects.equals(key, LOG_TAKE_UP_TIME)) {
                 continue;
             }
-            Object actualValue = getFieldByReflect(request, key + "_");
+            Object actualValue = reflectOnField(request, key + "_");
             if (actualValue == null) {
                 expectResult = -1;
                 break;
@@ -261,9 +262,11 @@ public class LogBusinessUtil {
         return printRpcMessage(logLocationConfigArgs, sgin, request, supplier, true);
     }
 
-    private static <T> T getFieldByReflect(Object request, String field) {
+    private static <T> T reflectOnField(Object request, String field) {
         try {
-            return Reflect.on(request).get(field);
+            Field declaredField = request.getClass().getDeclaredField(field);
+            declaredField.setAccessible(true);
+            return (T)ReflectionUtils.getField(declaredField, request);
         } catch (Exception e) {
             log.warn("the getFieldByReflect Exception, field:{}", field);
         }
