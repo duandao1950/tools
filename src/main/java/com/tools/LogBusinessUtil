@@ -19,9 +19,9 @@ import java.util.function.Supplier;
 public class LogBusinessUtil {
     private static boolean isOpen = true;
     private static boolean isRPCOpen = true;
-    private static String shopId = "1651";//"100070561";
+    private static String shopId = "";//"100070561" //1651;
     private static String activityId = "";//"17627"//10992;
-    private static String cityCode = "C320100";//
+    private static String cityCode = "";//C320100
     private static String logTakeUpTime = "1800";
 
     private static final String SHOP_ID = "shopId";
@@ -33,6 +33,7 @@ public class LogBusinessUtil {
     private static Map<String, String> getLogLocationConfigArgsMap(String logLocationConfigArgs) {
         try {
             //logLocationConfigArgs = "{\"shopId\": \"768\",\"cityCode\":\"C320100\"}";
+            //logLocationConfigArgs = "{shopId: \"100003311\", detailLimit: \"8\", cityCode: \"C340100\"}";
             Map<String, String> fieldMap = getLocalMap(logLocationConfigArgs);
             if (fieldMap != null) {
                 return fieldMap;
@@ -268,7 +269,7 @@ public class LogBusinessUtil {
             declaredField.setAccessible(true);
             return (T)ReflectionUtils.getField(declaredField, request);
         } catch (Exception e) {
-            log.warn("the getFieldByReflect Exception, field:{}", field);
+            log.warn("the reflectOnField Exception, field:{}, request:{}, error:{}", field, new Gson().toJson(request), e);
         }
         return null;
     }
