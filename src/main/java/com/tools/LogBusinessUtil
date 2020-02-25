@@ -18,9 +18,9 @@ import java.util.function.Supplier;
 public class LogBusinessUtil {
     private static boolean isOpen = true;
     private static boolean isRPCOpen = true;
-    private static String shopId = "1651";
-    private static String activityId = null;//"17627";
-    private static String cityCode = "C320100";
+    private static String shopId = "1651";//"100070561";
+    private static String activityId = "";//"17627"//10992;
+    private static String cityCode = "C320100";//
     private static String logTakeUpTime = "1800";
 
     private static final String LOG_TAKE_UP_TIME = "logTakeUpTime";
@@ -160,18 +160,26 @@ public class LogBusinessUtil {
                 .append(")").toString();
     }
 
-    public static <T> T printRpcMessage(String logLocationConfigArgs, String sign, Object request, Supplier<Object> supplier) {
+    private static <T> T printRpcMessage(String logLocationConfigArgs, String sign, Object request, Supplier<Object> supplier, boolean isRpc) {
         try {
             Stopwatch started = Stopwatch.createStarted();
             boolean isExpectBusinessResult = isExpectBusinessResult(logLocationConfigArgs, request);
             if (isExpectBusinessResult) {
-                print(sign, request, "rpc");
+                if (isRpc) {
+                    print(sign, request, "rpc");
+                } else {
+                    print(sign, request);
+                }
             }
             Object response = null;
             if (supplier != null) {
                 response = supplier.get();
                 if (isExpectBusinessResult) {
-                    print(sign, response, "rpc");
+                    if (isRpc) {
+                        print(sign, response, "rpc");
+                    } else {
+                        print(sign, response);
+                    }
                 }
             }
             long elapsed = started.elapsed(TimeUnit.MILLISECONDS);
@@ -227,15 +235,27 @@ public class LogBusinessUtil {
     }
 
     public static <T> T printMessage(Object request) {
-        return printRpcMessage("", "", request, null);
+        return printRpcMessage("", "", request, null, false);
     }
 
     public static <T> T printMessage(Object request, Supplier<Object> supplier) {
-        return printRpcMessage("", "", request, supplier);
+        return printRpcMessage("", "", request, supplier, false);
     }
 
-    public static <T> T printRpcMessage(String sign, Object request, Supplier<Object> supplier) {
-        return printRpcMessage("", sign, request, supplier);
+    public static <T> T printMessage(String sign, Object request, Supplier<Object> supplier) {
+        return printRpcMessage("", sign, request, supplier, false);
+    }
+
+    public static <T> T printRpcMessage(Object request, Supplier<Object> supplier) {
+        return printRpcMessage("", "", request, supplier, true);
+    }
+
+    public static <T> T printRpcMessage(String logLocationConfigArgs, Object request, Supplier<Object> supplier) {
+        return printRpcMessage(logLocationConfigArgs, "", request, supplier, true);
+    }
+
+    public static <T> T printRpcMessage(String logLocationConfigArgs, String sgin, Object request, Supplier<Object> supplier) {
+        return printRpcMessage(logLocationConfigArgs, sgin, request, supplier, true);
     }
 
     private static <T> T getFieldByReflect(Object request, String field) {
