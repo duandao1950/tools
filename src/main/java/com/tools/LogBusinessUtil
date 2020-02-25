@@ -1,0 +1,249 @@
+import com.google.common.base.Stopwatch;
+import com.google.common.base.Strings;
+import com.google.common.collect.Maps;
+import com.google.gson.*;
+import com.google.gson.reflect.TypeToken;
+import lombok.extern.slf4j.Slf4j;
+import org.joor.Reflect;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
+
+/**
+ * @Author duandao
+ * @Date 2019/10/26
+ * @Description
+ **/
+@Slf4j
+public class LogBusinessUtil {
+    private static boolean isOpen = true;
+    private static boolean isRPCOpen = true;
+    private static String shopId = "1651";
+    private static String activityId = null;//"17627";
+    private static String cityCode = "C320100";
+    private static String logTakeUpTime = "1800";
+
+    private static final String LOG_TAKE_UP_TIME = "logTakeUpTime";
+    private static final long DEFAULT_LOG_TAKE_UP_TIME = 50L;
+
+    private static Map<String, String> getLogLocationConfigArgsMap(String logLocationConfigArgs) {
+        try {
+            //logLocationConfigArgs = "{\"shopId\": \"1651\",\"cityCode\":\"C320100\"}";
+            Map<String, String> fieldMap = getLocalMap(logLocationConfigArgs);
+            if (fieldMap != null) {
+                return fieldMap;
+            }
+            if (Strings.isNullOrEmpty(logLocationConfigArgs)) {
+                return Collections.emptyMap();
+            }
+            Map<String, String> argsConfigMap = build().fromJson(logLocationConfigArgs, new TypeToken<Map<String, String>>(){}.getType());
+            return argsConfigMap;
+        } catch (Exception e) {
+            log.warn("the getLogLocationConfigArgsMap is exceptin, logLocationConfigArgs:{}", logLocationConfigArgs);
+        }
+        return Collections.emptyMap();
+    }
+
+    private static Map<String, String> getLocalMap(String logLocationConfigArgs) {
+        if (Strings.isNullOrEmpty(logLocationConfigArgs)) {
+            Map<String, String> fieldMap = Maps.newHashMap();
+            if (!Strings.isNullOrEmpty(shopId)) {
+                fieldMap.put("shopId", shopId);
+            }
+            if (!Strings.isNullOrEmpty(activityId)) {
+                fieldMap.put("activityId", activityId);
+            }
+            if (!Strings.isNullOrEmpty(cityCode)) {
+                fieldMap.put("cityCode", cityCode);
+            }
+            if (Long.valueOf(logTakeUpTime) > 0) {
+                fieldMap.put(LOG_TAKE_UP_TIME, logTakeUpTime);
+            }
+            return fieldMap;
+        }
+        return null;
+    }
+
+    private static List<String> shouldSkipFields = new ArrayList<>();
+    static {
+        shouldSkipFields.add("bitField0_");
+        shouldSkipFields.add("memoizedIsInitialized");
+        shouldSkipFields.add("unknownFields");
+        shouldSkipFields.add("memoizedSize");
+        shouldSkipFields.add("memoizedHashCode");
+        shouldSkipFields.add("MemoizedSerializedSize");
+    }
+
+    private LogBusinessUtil() {
+
+    }
+
+    /**
+     * 打印格式化JSON数据
+     * @param src
+     */
+    public static void print(String sign, Object src, String... val) {
+        if (isRPCOpen && src != null) {
+            String text = toJson(src);
+            log.warn("\n" + " " + sign + " " + text + "\n");
+            if (val != null
+                    && src.getClass().getSimpleName().toLowerCase().indexOf("response") >= 0) {
+                StackTraceElement tmp = Thread.currentThread().getStackTrace()[2];
+                JsonObject jsonObject = new JsonObject();
+                jsonObject.addProperty("declaringClass", tmp.getClassName());
+                jsonObject.addProperty("fileName", tmp.getMethodName()+"("+tmp.getFileName()+":"+tmp.getLineNumber()+")");
+                log.warn("\n" + " " + sign + " " + toJson(jsonObject) +"\n");
+                log.warn(sign + " " + toJson(getLogLocality(tmp)));
+            }
+        }
+    }
+
+    /**
+     * 打印格式化JSON数据
+     * @param src
+     */
+    public static void print(String sign, Object src) {
+        if (isOpen && src != null) {
+            String text = toJson(src);
+            log.warn("\n" + " " + sign + " " + text + "\n");
+        }
+    }
+
+    private static boolean matches(String faName) {
+        for (String name:shouldSkipFields) {
+            if (faName.indexOf(name) >= 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+    /**
+     * 单元测试接口 JSON文档
+     * 1、去掉不必要的字段
+     * 2、格式化输出
+     * @return
+     */
+    public static Gson build() {
+        ExclusionStrategy myExclusionStrategy = new ExclusionStrategy() {
+            @Override
+            public boolean shouldSkipField(FieldAttributes fa) {
+                return matches(fa.getName());
+            }
+            @Override
+            public boolean shouldSkipClass(Class<?> clazz) {
+                return false;
+            }
+        };
+
+        return new GsonBuilder()
+                .setExclusionStrategies(myExclusionStrategy)
+                .disableHtmlEscaping()
+                .setPrettyPrinting()
+                .serializeNulls()
+                .create();
+    }
+
+    //去掉下划线
+    public static String toJson(Object src) {
+        String formatText = build().toJson(src).replace("_","");
+        log.warn("#################入参出参########################");
+        return formatText;
+    }
+
+    public static String getLogLocality(StackTraceElement tmp){
+        StringBuilder sb = new StringBuilder();
+        return sb.append(tmp.getMethodName())
+                .append("(")
+                .append(tmp.getFileName())
+                .append(":")
+                .append(tmp.getLineNumber())
+                .append(")").toString();
+    }
+
+    public static <T> T printRpcMessage(String logLocationConfigArgs, String sign, Object request, Supplier<Object> supplier) {
+        try {
+            Stopwatch started = Stopwatch.createStarted();
+            boolean isExpectBusinessResult = isExpectBusinessResult(logLocationConfigArgs, request);
+            if (isExpectBusinessResult) {
+                print(sign, request, "rpc");
+            }
+            Object response = null;
+            if (supplier != null) {
+                response = supplier.get();
+                if (isExpectBusinessResult) {
+                    print(sign, response, "rpc");
+                }
+            }
+            long elapsed = started.elapsed(TimeUnit.MILLISECONDS);
+            if (isExpectLogTakeUpTimeResult(logLocationConfigArgs, elapsed)) {
+                log.warn(sign + "#printLogTakeUpTime: {} ms", elapsed);
+            }
+            return response != null ? (T)response : null;
+        } catch (Exception e) {
+            log.warn("the printRpcMessage is exceptin, logLocationConfigArgs:{}", logLocationConfigArgs);
+        }
+        return supplier != null ? (T)supplier.get() : null;
+    }
+
+    private static boolean isExpectBusinessResult(String logLocationConfigArgs, Object request) {
+        int expectResult = 0;
+        Map<String, String> logLocationConfigArgsMap = getLogLocationConfigArgsMap(logLocationConfigArgs);
+        for (String key:logLocationConfigArgsMap.keySet()) {
+            if (Objects.equals(key, LOG_TAKE_UP_TIME)) {
+                continue;
+            }
+            Object actualValue = getFieldByReflect(request, key + "_");
+            if (actualValue == null) {
+                expectResult = -1;
+                break;
+            }
+            String expectValue = logLocationConfigArgsMap.get(key);
+            if (!Objects.equals(String.valueOf(actualValue), expectValue)) {
+                expectResult = -1;
+                break;
+            }
+            expectResult++;
+        }
+        return expectResult > 0;
+    }
+
+    private static boolean isExpectLogTakeUpTimeResult(String logLocationConfigArgs, long elapsed) {
+        int expectResult = 0;
+        Map<String, String> logLocationConfigArgsMap = getLogLocationConfigArgsMap(logLocationConfigArgs);
+        for (String key:logLocationConfigArgsMap.keySet()) {
+            if (Objects.equals(key, LOG_TAKE_UP_TIME)) {
+                String expectElapsed = logLocationConfigArgsMap.get(key);
+                if (Strings.isNullOrEmpty(expectElapsed) || Long.valueOf(expectElapsed) <= DEFAULT_LOG_TAKE_UP_TIME) {
+                    expectResult = -1;
+                    break;
+                }
+                if (elapsed >= Long.valueOf(expectElapsed)) {
+                    expectResult++;
+                    break;
+                }
+            }
+        }
+        return expectResult > 0;
+    }
+
+    public static <T> T printMessage(Object request) {
+        return printRpcMessage("", "", request, null);
+    }
+
+    public static <T> T printMessage(Object request, Supplier<Object> supplier) {
+        return printRpcMessage("", "", request, supplier);
+    }
+
+    public static <T> T printRpcMessage(String sign, Object request, Supplier<Object> supplier) {
+        return printRpcMessage("", sign, request, supplier);
+    }
+
+    private static <T> T getFieldByReflect(Object request, String field) {
+        try {
+            return Reflect.on(request).get(field);
+        } catch (Exception e) {
+            log.warn("the getFieldByReflect Exception, field:{}", field);
+        }
+        return null;
+    }
+}
