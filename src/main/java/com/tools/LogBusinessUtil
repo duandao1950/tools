@@ -35,7 +35,7 @@ public class LogBusinessUtil {
             //logLocationConfigArgs = "{\"shopId\": \"768\",\"cityCode\":\"C320100\"}";
             //logLocationConfigArgs = "{shopId: \"100003311\", detailLimit: \"8\", cityCode: \"C340100\"}";
             Map<String, String> fieldMap = getLocalMap(logLocationConfigArgs);
-            if (fieldMap != null) {
+            if (fieldMap != null && !fieldMap.isEmpty()) {
                 return fieldMap;
             }
             if (Strings.isNullOrEmpty(logLocationConfigArgs)) {
@@ -44,7 +44,7 @@ public class LogBusinessUtil {
             Map<String, String> argsConfigMap = build().fromJson(logLocationConfigArgs, new TypeToken<Map<String, String>>(){}.getType());
             return argsConfigMap;
         } catch (Exception e) {
-            log.warn("the getLogLocationConfigArgsMap is exceptin, logLocationConfigArgs:{}", logLocationConfigArgs);
+            log.warn("the getLogLocationConfigArgsMap is exceptin, logLocationConfigArgs:{}, error:{}", logLocationConfigArgs, e.getMessage());
         }
         return Collections.emptyMap();
     }
@@ -165,27 +165,15 @@ public class LogBusinessUtil {
                 .append(")").toString();
     }
 
-    private static <T> T printRpcMessage(String logLocationConfigArgs, String sign, Object request, Supplier<Object> supplier, boolean isRpc) {
+    private static <T> T logRpcMessage(String logLocationConfigArgs, String sign, Object request, Supplier<Object> supplier, boolean isRpc) {
         try {
             Stopwatch started = Stopwatch.createStarted();
             boolean isExpectBusinessResult = isExpectBusinessResult(logLocationConfigArgs, request);
-            if (isExpectBusinessResult) {
-                if (isRpc) {
-                    print(sign, request, "rpc");
-                } else {
-                    print(sign, request);
-                }
-            }
+            logBusiness(sign, request, isRpc, isExpectBusinessResult);
             Object response = null;
             if (supplier != null) {
                 response = supplier.get();
-                if (isExpectBusinessResult) {
-                    if (isRpc) {
-                        print(sign, response, "rpc");
-                    } else {
-                        print(sign, response);
-                    }
-                }
+                logBusiness(sign, response, isRpc, isExpectBusinessResult);
             }
             long elapsed = started.elapsed(TimeUnit.MILLISECONDS);
             if (isExpectLogTakeUpTimeResult(logLocationConfigArgs, elapsed)) {
@@ -196,6 +184,17 @@ public class LogBusinessUtil {
             log.warn("the printRpcMessage is exceptin, logLocationConfigArgs:{}", logLocationConfigArgs);
         }
         return supplier != null ? (T)supplier.get() : null;
+    }
+
+    private static void logBusiness(String sign, Object request, boolean isRpc, boolean isExpectBusinessResult) {
+        if (!isExpectBusinessResult) {
+            return;
+        }
+        if (isRpc) {
+            print(sign, request, "rpc");
+        } else {
+            print(sign, request);
+        }
     }
 
     private static boolean isExpectBusinessResult(String logLocationConfigArgs, Object request) {
@@ -239,38 +238,42 @@ public class LogBusinessUtil {
         return expectResult > 0;
     }
 
-    public static <T> T printMessage(Object request) {
-        return printRpcMessage("", "", request, null, false);
-    }
-
-    public static <T> T printMessage(Object request, Supplier<Object> supplier) {
-        return printRpcMessage("", "", request, supplier, false);
-    }
-
-    public static <T> T printMessage(String sign, Object request, Supplier<Object> supplier) {
-        return printRpcMessage("", sign, request, supplier, false);
-    }
-
-    public static <T> T printRpcMessage(Object request, Supplier<Object> supplier) {
-        return printRpcMessage("", "", request, supplier, true);
-    }
-
-    public static <T> T printRpcMessage(String logLocationConfigArgs, Object request, Supplier<Object> supplier) {
-        return printRpcMessage(logLocationConfigArgs, "", request, supplier, true);
-    }
-
-    public static <T> T printRpcMessage(String logLocationConfigArgs, String sgin, Object request, Supplier<Object> supplier) {
-        return printRpcMessage(logLocationConfigArgs, sgin, request, supplier, true);
-    }
-
     private static <T> T reflectOnField(Object request, String field) {
         try {
             Field declaredField = request.getClass().getDeclaredField(field);
             declaredField.setAccessible(true);
             return (T)ReflectionUtils.getField(declaredField, request);
         } catch (Exception e) {
-            log.warn("the reflectOnField Exception, field:{}, request:{}, error:{}", field, new Gson().toJson(request), e);
+            log.warn("the reflectOnField Exception, field:{}, request:{}, error:{}", field, new Gson().toJson(request), e.getMessage());
         }
         return null;
+    }
+
+    public static <T> T printMessage(Object request) {
+        return logRpcMessage("", "", request, null, false);
+    }
+
+    public static <T> T printMessage(Object request, Supplier<Object> supplier) {
+        return logRpcMessage("", "", request, supplier, false);
+    }
+
+    public static <T> T printMessage(String logLocationConfigArgs, Object request, Supplier<Object> supplier) {
+        return logRpcMessage(logLocationConfigArgs, "", request, supplier, false);
+    }
+
+    public static <T> T printMessage(String logLocationConfigArgs, String sgin, Object request, Supplier<Object> supplier) {
+        return logRpcMessage(logLocationConfigArgs, sgin, request, supplier, false);
+    }
+
+    public static <T> T printRpcMessage(Object request, Supplier<Object> supplier) {
+        return logRpcMessage("", "", request, supplier, true);
+    }
+
+    public static <T> T printRpcMessage(String logLocationConfigArgs, Object request, Supplier<Object> supplier) {
+        return logRpcMessage(logLocationConfigArgs, "", request, supplier, true);
+    }
+
+    public static <T> T printRpcMessage(String logLocationConfigArgs, String sgin, Object request, Supplier<Object> supplier) {
+        return logRpcMessage(logLocationConfigArgs, sgin, request, supplier, true);
     }
 }
