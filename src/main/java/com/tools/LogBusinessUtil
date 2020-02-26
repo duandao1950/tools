@@ -22,7 +22,7 @@ public class LogBusinessUtil {
     private static String shopId = "";//"100070561" //1651;
     private static String activityId = "";//"17627"//10992;
     private static String cityCode = "";//C320100
-    private static String logTakeUpTime = "1800";
+    private static String logTakeUpTime = "";//1800
 
     private static final String SHOP_ID = "shopId";
     private static final String ACTIVITY_ID = "activityId";
@@ -44,7 +44,7 @@ public class LogBusinessUtil {
             Map<String, String> argsConfigMap = build().fromJson(logLocationConfigArgs, new TypeToken<Map<String, String>>(){}.getType());
             return argsConfigMap;
         } catch (Exception e) {
-            log.warn("the getLogLocationConfigArgsMap is exceptin, logLocationConfigArgs:{}, error:{}", logLocationConfigArgs, e.getMessage());
+            //log.warn("the getLogLocationConfigArgsMap is exceptin, logLocationConfigArgs:{}, error:{}", logLocationConfigArgs, e.getMessage());
         }
         return Collections.emptyMap();
     }
@@ -61,7 +61,7 @@ public class LogBusinessUtil {
             if (!Strings.isNullOrEmpty(cityCode)) {
                 fieldMap.put(CITY_CODE, cityCode);
             }
-            if (Long.valueOf(logTakeUpTime) > 0) {
+            if (!Strings.isNullOrEmpty(logTakeUpTime) && Long.valueOf(logTakeUpTime) > 0) {
                 fieldMap.put(LOG_TAKE_UP_TIME, logTakeUpTime);
             }
             return fieldMap;
@@ -244,7 +244,7 @@ public class LogBusinessUtil {
             declaredField.setAccessible(true);
             return (T)ReflectionUtils.getField(declaredField, request);
         } catch (Exception e) {
-            log.warn("the reflectOnField Exception, field:{}, request:{}, error:{}", field, new Gson().toJson(request), e.getMessage());
+            //log.warn("the reflectOnField Exception, field:{}, request:{}, error:{}", field, new Gson().toJson(request), e.getMessage());
         }
         return null;
     }
