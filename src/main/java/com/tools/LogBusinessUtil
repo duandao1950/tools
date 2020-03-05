@@ -17,13 +17,13 @@ import java.util.function.Supplier;
  **/
 @Slf4j
 public class LogBusinessUtil {
-    private static boolean isOpen = true;
-    private static boolean isRPCOpen = false;
+    private static boolean isOpen = false;
+    private static boolean isRPCOpen = true;
     private static String shopId = "";//"100070561" //1651;
     private static String activityId = "";//"17627"//10992;
     private static String cityCode = "";//C320100
     private static String logTakeUpTime = "";//1800
-    private static boolean isLogTag = true;//1800
+    private static boolean isLogTag = false;//1800
 
     private static final String SHOP_ID = "shopId";
     private static final String ACTIVITY_ID = "activityId";
@@ -35,7 +35,6 @@ public class LogBusinessUtil {
     private static Map<String, String> getLogLocationConfigArgsMap(String logLocationConfigArgs) {
         try {
             //logLocationConfigArgs = "{\"shopId\": \"768\",\"cityCode\":\"C320100\"}";
-            //logLocationConfigArgs = "{shopId: \"100003311\", detailLimit: \"8\", cityCode: \"C340100\"}";
             Map<String, String> fieldMap = getLocalMap(logLocationConfigArgs);
             if (fieldMap != null && !fieldMap.isEmpty()) {
                 return fieldMap;
@@ -201,7 +200,7 @@ public class LogBusinessUtil {
 
     private static boolean isExpectBusinessResult(String logLocationConfigArgs, Object request) {
         if (isLogTag) {
-            return isLogTag;
+            return true;
         }
         int expectResult = 0;
         Map<String, String> logLocationConfigArgsMap = getLogLocationConfigArgsMap(logLocationConfigArgs);
@@ -209,7 +208,7 @@ public class LogBusinessUtil {
             if (Objects.equals(key, LOG_TAKE_UP_TIME)) {
                 continue;
             }
-            Object actualValue = reflectOnField(request, key + "_");
+            Object actualValue = reflectOnFieldValue(request, key);
             if (actualValue == null) {
                 expectResult = -1;
                 break;
@@ -243,6 +242,14 @@ public class LogBusinessUtil {
         return expectResult > 0;
     }
 
+    private static <T> T reflectOnFieldValue(Object request, String field) {
+        T value = reflectOnField(request, field);
+        if (value != null) {
+            return value;
+        }
+        return reflectOnField(request, field + "_");
+    }
+
     private static <T> T reflectOnField(Object request, String field) {
         try {
             Field declaredField = request.getClass().getDeclaredField(field);
@@ -250,9 +257,9 @@ public class LogBusinessUtil {
             Object value = declaredField.get(request);
             return (T)value;
         } catch (IllegalAccessException var3) {
-            log.warn("IllegalAccessException");
+            //log.warn("IllegalAccessException");
         } catch (Exception e) {
-            log.warn("the reflectOnField Exception, field:{}, request:{}, error:{}", field, new Gson().toJson(request), e.getMessage());
+            //log.warn("the reflectOnField Exception, field:{}, request:{}, error:{}", field, new Gson().toJson(request), e.getMessage());
         }
         return null;
     }
